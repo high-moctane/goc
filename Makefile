@@ -1,4 +1,5 @@
-build: goc
+build:
+	go build .
 
 dockerbuild:
 	make clean

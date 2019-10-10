@@ -89,7 +89,7 @@ func tokenize(s string) *Token {
 			continue
 		}
 
-		if s[0] == '+' || s[0] == '-' {
+		if s[0] == '+' || s[0] == '-' || s[0] == '*' || s[0] == '/' || s[0] == '(' || s[0] == ')' {
 			cur = newToken(TkReserved, cur, s)
 			s = s[1:]
 			continue
@@ -110,6 +110,103 @@ func tokenize(s string) *Token {
 	return head.next
 }
 
+// 抽象構文木のノードの種類
+const (
+	NdAdd = iota // +
+	NdSub        // -
+	NdMul        // *
+	NdDiv        // /
+	NdNum        // 整数
+)
+
+type NodeKind = int
+
+type Node struct {
+	kind     NodeKind // ノードの型
+	lhs, rhs *Node    // 左辺，右辺
+	val      int      // kind が NdNum の場合のみ使う
+}
+
+func newNode(kind NodeKind, lhs, rhs *Node) *Node {
+	return &Node{
+		kind: kind,
+		lhs:  lhs,
+		rhs:  rhs,
+	}
+}
+
+func newNodeNum(val int) *Node {
+	return &Node{
+		kind: NdNum,
+		val:  val,
+	}
+}
+
+func expr() *Node {
+	node := mul()
+
+	for {
+		if consume('+') {
+			node = newNode(NdAdd, node, mul())
+		} else if consume('-') {
+			node = newNode(NdSub, node, mul())
+		} else {
+			return node
+		}
+	}
+}
+
+func mul() *Node {
+	node := primary()
+
+	for {
+		if consume('*') {
+			node = newNode(NdMul, node, primary())
+		} else if consume('/') {
+			node = newNode(NdDiv, node, primary())
+		} else {
+			return node
+		}
+	}
+}
+
+func primary() *Node {
+	if consume('(') {
+		node := expr()
+		expect(')')
+		return node
+	}
+
+	return newNodeNum(expectNumber())
+}
+
+func gen(node *Node) {
+	if node.kind == NdNum {
+		fmt.Printf("	push	%d\n", node.val)
+		return
+	}
+
+	gen(node.lhs)
+	gen(node.rhs)
+
+	fmt.Println("	pop	rdi")
+	fmt.Println("	pop	rax")
+
+	switch node.kind {
+	case NdAdd:
+		fmt.Println("	add	rax, rdi")
+	case NdSub:
+		fmt.Println("	sub	rax, rdi")
+	case NdMul:
+		fmt.Println("	imul	rax, rdi")
+	case NdDiv:
+		fmt.Println("	cqo")
+		fmt.Println("	idiv	rdi")
+	}
+
+	fmt.Println("	push	rax")
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "引数の個数が正しくありません")
@@ -118,26 +215,15 @@ func main() {
 
 	userInput = os.Args[1]
 	token = tokenize(userInput)
+	node := expr()
 
 	fmt.Println(".intel_syntax noprefix")
 	fmt.Println(".global main")
 	fmt.Println("main:")
 
-	// 式の最初は数でなければいけないので，それをチェックして最初の mov 命令を出力
-	fmt.Printf("	mov	rax, %d\n", expectNumber())
+	gen(node)
 
-	// `+ <数>` あるいは `- <数>` というトークンの並びを消費しつつ
-	// アセンブリを出力
-	for !atEOF() {
-		if consume('+') {
-			fmt.Printf("	add	rax, %d\n", expectNumber())
-			continue
-		}
-
-		expect('-')
-		fmt.Printf("	sub	rax, %d\n", expectNumber())
-	}
-
+	fmt.Println("	pop	rax")
 	fmt.Println("	ret")
 }
 
