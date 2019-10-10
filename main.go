@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -24,6 +23,18 @@ type Token struct {
 
 var token *Token // 現在着目しているトークン
 
+var userInput string
+
+func errorAt(loc string, message string) {
+	pos := len(userInput) - len(loc)
+	fmt.Fprintf(os.Stderr, "%s\n", userInput)
+	for i := 0; i < pos; i++ {
+		fmt.Fprint(os.Stderr, " ")
+	}
+	fmt.Fprintln(os.Stderr, "^", message)
+	os.Exit(1)
+}
+
 // 次のトークンが期待している記号のときには，トークンを1つ読み進めて真を返す。
 // それ以外の場合には偽を返す。
 func consume(op byte) bool {
@@ -38,7 +49,7 @@ func consume(op byte) bool {
 // それ以外の場合にはエラーを報告する
 func expect(op byte) {
 	if token.kind != TkReserved || token.str[0] != op {
-		log.Fatalf("'%s' ではありません", string(op))
+		errorAt(token.str, fmt.Sprintf("'%s' ではありません", string(op)))
 	}
 	token = token.next
 }
@@ -47,7 +58,7 @@ func expect(op byte) {
 // それ以外の場合にはエラーを報告する。
 func expectNumber() int {
 	if token.kind != TkNum {
-		log.Fatalln("数ではありません")
+		errorAt(token.str, "数ではありません")
 	}
 	val := token.val
 	token = token.next
@@ -92,7 +103,7 @@ func tokenize(s string) *Token {
 			continue
 		}
 
-		log.Fatalln("トークナイズできません")
+		errorAt(s, "トークナイズできません")
 	}
 
 	newToken(TkEOF, cur, s)
@@ -105,7 +116,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	token = tokenize(os.Args[1])
+	userInput = os.Args[1]
+	token = tokenize(userInput)
 
 	fmt.Println(".intel_syntax noprefix")
 	fmt.Println(".global main")
