@@ -19,6 +19,7 @@ type Token struct {
 	next *Token    // 次の入力トークン
 	val  int       // kind が TkNum の場合，その数値
 	str  string    // トークン文字列
+	len  int       // トークンの長さ
 }
 
 var token *Token // 現在着目しているトークン
@@ -37,8 +38,8 @@ func errorAt(loc string, message string) {
 
 // 次のトークンが期待している記号のときには，トークンを1つ読み進めて真を返す。
 // それ以外の場合には偽を返す。
-func consume(op byte) bool {
-	if token.kind != TkReserved || token.str[0] != op {
+func consume(op string) bool {
+	if token.kind != TkReserved || token.str != op {
 		return false
 	}
 	token = token.next
